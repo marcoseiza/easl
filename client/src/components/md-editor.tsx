@@ -1,22 +1,40 @@
 import React from "react";
 import { Controlled as CodeMirror } from 'react-codemirror2'
-import * as cm from 'codemirror'
+import cm from 'codemirror';
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useParams } from "react-router";
-import "../styles/md-editor.css";
-require('../../node_modules/codemirror/mode/markdown/markdown');
-
+import { createStyles, makeStyles, Theme } from "@material-ui/core";
 
 export interface MdEditorProps {
-  options: object;
+  options: cm.EditorConfiguration;
 }
 
 interface RouterParams {
   id: string;
 }
 
-const MdEditor: React.FC<MdEditorProps> = (props) => {
+const useStyles = makeStyles((theme: Theme) =>
+  createStyles({
+    codeMirrorWrapper: {
+      display: `grid`,
+      placeItems: `center`,
+    },
+    codeMirror: {
+      "& .CodeMirror": {
+        margin: `1in`,
+        width: `210mm`,
+        height: `297mm`,
+        outline: `none`,
+      },
+      "& .CodeMirror-scroll": {
+        padding: `1in`,
+      }
+    }
+  }));
+
+export const MdEditor: React.FC<MdEditorProps> = (props) => {
+  const classes = useStyles();
   let author = useRef("");
   let { id: docId } = useParams<RouterParams>();
   const [value, setValue] = useState("");
@@ -54,17 +72,18 @@ const MdEditor: React.FC<MdEditorProps> = (props) => {
   }, [socket, editor, docId])
 
   return (
-    <div className="CodeMirrorWrapper">
+    <div className={classes.codeMirrorWrapper}>
       <CodeMirror
         value={value}
         options={props.options}
-        onBeforeChange={(ed, dt, val) => setValue(val)}
+        onBeforeChange={(_ed, _dt, val) => setValue(val)}
+        className={classes.codeMirror}
         editorDidMount={(ed) => {
           setEditor(ed);
           ed.setOption("readOnly", true);
           setValue("loading...")
         }}
-        onChange={(ed, dt, val) => dt.origin !== author.current && setData(dt)}
+        onChange={(_ed, dt, _val) => dt.origin !== author.current && setData(dt)}
       />
     </div>
   );

@@ -1,35 +1,20 @@
 import React from "react";
+import cm from 'codemirror';
+
 import MdEditor from "./md-editor";
 
-export interface Props {
+export const MdHeader: React.FC = () => {
+  /* eslint-disable-next-line */
+  const [options, _] = React.useState<cm.EditorConfiguration>({
+    mode: 'markdown',
+    theme: 'solarized dark',
+    lineNumbers: false,
+    lineWrapping: true
+  });
 
-}
-
-export interface State {
-  options: object;
-}
-
-
-class MdHeader extends React.Component<Props, State> {
-
-  constructor(props: Props) {
-    super(props);
-
-    this.state = {
-      options: {
-        mode: 'markdown',
-        theme: '3024-day',
-        lineNumbers: false,
-        lineWrapping: true
-      }
-    };
-  }
-
-  render() {
-    return (
-      <MdEditor options={this.state.options} />
-    );
-  }
+  return (
+    <MdEditor options={options} />
+  );
 }
 
 export default MdHeader;

@@ -16,12 +16,12 @@ export class UserResolver {
 
   @FieldResolver()
   accessToken(@Ctx() ctx: Context): string | undefined {
-    return ctx.req.user && (ctx.req.user as any).accessToken;
+    return ctx.req.session && (ctx.req.session as any).accessToken;
   }
 
   @Query(() => User, { nullable: true })
-  async me(@Ctx() ctx: Context): Promise<User | null | undefined> {
-    const userId = (ctx.req.user! as any).id;
+  async me(@Ctx() ctx: Context): Promise<any> {
+    const { userId = "" } = ctx.req.session as any || {};
     return userId ? this.userRepo.findOne(userId) : null;
   }
 }

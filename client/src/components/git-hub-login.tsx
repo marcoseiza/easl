@@ -15,7 +15,7 @@ const styles = makeStyles((theme: Theme) => ({
   }
 }));
 
-const GitHubLogin: React.FC = () => {
+export const GitHubLogin: React.FC = () => {
 
   const classes = styles();
 

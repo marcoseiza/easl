@@ -5,63 +5,109 @@ import * as express from 'express';
 import * as http from 'http';
 import * as passport from 'passport';
 import { Server, Socket } from 'socket.io';
-import { Container } from "typedi";
+import * as cors from 'cors';
+import * as Redis from "ioredis";
+import * as connectRedis from 'connect-redis'
+import * as session from "express-session";
+import { RedisClient } from 'redis';
 import * as typeorm from 'typeorm';
-
 
 import {
   createTypeormConnection,
-  createSession,
   createGitHubStrategy,
   CLIENT_HOST_NAME,
-  SERVER_PORT
+  SERVER_PORT,
+  CLIENT_HOST_NAME_DEV
 } from './utils';
 import { createApolloServer } from './utils/createApolloServer';
+import { Container } from 'typeorm-typedi-extensions';
 
 dotenv.config({ path: __dirname + '/../.env' });
+
+const redis =
+  process.env.NODE_ENV === "production"
+    ? new Redis(process.env.REDIS_URL)
+    : new Redis();
+
+// Connect node.req.session to redis backing store.
+const RedisStore = connectRedis(session);
 
 typeorm.useContainer(Container);
 
 async function main() {
 
-  const connection = await createTypeormConnection();
+  console.log(`Creating database connection...`);
+  const conn = await createTypeormConnection();
+  conn && await conn.runMigrations()
 
-  connection && await connection.runMigrations();
-
+  console.log("Creating express server...");
   const app = express();
 
+  console.log("Creating GQL server...");
   const server = await createApolloServer();
 
-  await server.start();
+  app.set("trust proxy", 1);
 
-  server.applyMiddleware({ app, cors: false });
+  app.use(cors({
+    credentials: true,
+    origin:
+      process.env.NODE_ENV === "production"
+        ? CLIENT_HOST_NAME
+        : CLIENT_HOST_NAME_DEV,
+  }))
 
-  app.use(createSession());
+  app.use(session({
+    store: new RedisStore({
+      client: (redis as unknown) as RedisClient,
+    }),
+    name: "easlqid",
+    secret: process.env.SESSION_SECRET!,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 1000 * 60 * 60 * 24 * 365, // = 1 year
+    }
+  }));
+
+  passport.use(createGitHubStrategy());
 
   app.use(passport.initialize());
-
-  app.use(passport.session());
 
   passport.serializeUser((user: any, cb) => { cb(null, user); });
 
   passport.deserializeUser((user: any, cb) => { cb(null, user); });
-
-  passport.use(createGitHubStrategy());
-
-  passport.session();
 
   app.get('/auth', passport.authenticate('github', { session: false }));
 
   app.get('/auth/callback',
     passport.authenticate(
       'github',
-      { failureRedirect: `${CLIENT_HOST_NAME}/login` }
+      {
+        failureRedirect: `${CLIENT_HOST_NAME}/login`,
+        session: false
+      }
     ),
-    (_req, res) => {
+    (req: any, res) => {
+
+      if (req.user.user.id && req.session) {
+        req.session.userId = req.user.user.id;
+        req.session.accessToken = req.user.accessToken;
+        req.session.refreshToken = req.user.refreshToken;
+      }
       // Successful authentication, redirect home.
       res.redirect(CLIENT_HOST_NAME);
     }
   );
+
+  app.get('/session', (req, res) => {
+    res.send(req.session);
+  })
+
+  await server.start();
+
+  server.applyMiddleware({ app, cors: false });
 
   const httpServer = http.createServer(app);
 
@@ -73,7 +119,7 @@ async function main() {
   });
 
   io.on("connection", (socket: Socket) => {
-    console.log("connected");
+    console.log("Connected to web socket.");
 
     socket.on("get-doc", docId => {
       // TODO: Get doc from github.
@@ -89,7 +135,7 @@ async function main() {
   });
 
   httpServer.listen(SERVER_PORT, () => {
-    console.log(`Server started on port: ${SERVER_PORT}`)
+    console.log(`🚀 Server ready on port: ${SERVER_PORT}`)
   });
 
 }
